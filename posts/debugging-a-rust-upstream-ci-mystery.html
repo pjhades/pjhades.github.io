@@ -13,16 +13,16 @@ the CI jobs were automatically started by the bot (bors), to run a full set of t
 One of the jobs, <code>dist-various-1</code>, failed, and I fixed it in my PR.
 In order to make sure that the job can now pass, I manually ran
 <code>dist-various-{1,2}</code>, following the instructions from the <a href="https://rustc-dev-guide.rust-lang.org/tests/ci.html#using-ci-to-test">official guide</a>.
-This time both jobs fail with this error:</p>
+This time both jobs failed with this error:</p>
 <pre style="background-color:#eff1f5;"><code><span style="color:#4f5b66;">cp: cannot stat &#39;obj/build/metrics.json&#39;: No such file or directory
 </span><span style="color:#4f5b66;">##[error]Process completed with exit code 1.
 </span></code></pre>
-<p>I am pretty sure that I never touched anything related to <code>metrics.json</code> or
-to metrics in general. Actually I don't even know what metrics mean in this context.
-But at least my fix for the original problem seems to work because this is a new error.</p>
-<p>So, what is <code>metrics.json</code> and where is the error from?
-Searching for <code>metrics.json</code> in the codebase quickly shows that the error comes from
-the script <a href="https://github.com/rust-lang/rust/blob/master/src/ci/scripts/upload-artifacts.sh#L29"><code>upload-artifacts.sh</code></a> that uploads the build artifacts to S3:</p>
+<p>I was pretty sure that I never touched anything related to <code>metrics.json</code> or
+to metrics in general. Actually I didn't even know what metrics mean in this context.
+But at least my fix for the original problem seemed to work because this was a new error.</p>
+<p>So, what is <code>metrics.json</code>? Where was that error from?
+Searching for <code>metrics.json</code> in the codebase quickly showed that the error came from
+the script <code>upload-artifacts.sh</code> that uploads the build artifacts to S3:</p>
 <pre style="background-color:#eff1f5;"><code class="language-bash"><span style="color:#a7adba;">#!/bin/bash
 </span><span style="color:#a7adba;"># Upload all the artifacts to our S3 bucket. All the files inside ${upload_dir}
 </span><span style="color:#a7adba;"># will be uploaded to the deploy bucket and eventually signed and released in
@@ -32,11 +32,11 @@ the script <a href="https://github.com/rust-lang/rust/blob/master/src/ci/scripts
 </span><span style="color:#8fa1b3;">cp </span><span style="color:#4f5b66;">&quot;$</span><span style="color:#a3be8c;">{</span><span style="color:#bf616a;">build_dir</span><span style="color:#a3be8c;">}/metrics.json</span><span style="color:#4f5b66;">&quot; &quot;$</span><span style="color:#a3be8c;">{</span><span style="color:#bf616a;">upload_dir</span><span style="color:#a3be8c;">}/metrics-</span><span style="color:#4f5b66;">$</span><span style="color:#a3be8c;">{</span><span style="color:#bf616a;">CI_JOB_NAME</span><span style="color:#a3be8c;">}.json</span><span style="color:#4f5b66;">&quot;
 </span><span style="color:#a7adba;"># ...
 </span></code></pre>
-<p>Luckily, this script answers my questions: <code>metrics.json</code> contains build metrics, which are collected
-and displayed on <a href="https://static.rust-lang.org">static.rust-lang.org</a>. The error is because <code>metrics.json</code> is
+<p>Luckily, this script answered my questions: <code>metrics.json</code> contains build metrics, which are collected
+and displayed on <a href="https://static.rust-lang.org">static.rust-lang.org</a>. The error was because <code>metrics.json</code> was
 somehow missing.</p>
-<p>Why is it missing? Continuing with the search for <code>metrics.json</code>, it seems that <a href="https://github.com/rust-lang/rust/blob/master/src/bootstrap/metrics.rs#L148">this function</a> is the one
-that generates the file:</p>
+<p>Why was it missing then? Continuing with the search for <code>metrics.json</code>,
+it showed that this function is what generates that file:</p>
 <pre style="background-color:#eff1f5;"><code class="language-rust"><span style="color:#b48ead;">impl </span><span style="color:#4f5b66;">BuildMetrics {
 </span><span style="color:#4f5b66;">    </span><span style="color:#a7adba;">// ...
 </span><span style="color:#4f5b66;">    </span><span style="color:#b48ead;">pub</span><span style="color:#4f5b66;">(</span><span style="color:#b48ead;">crate</span><span style="color:#4f5b66;">) </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">persist</span><span style="color:#4f5b66;">(&amp;</span><span style="color:#bf616a;">self</span><span style="color:#4f5b66;">, </span><span style="color:#bf616a;">build</span><span style="color:#4f5b66;">: &amp;Build) {
@@ -50,7 +50,7 @@ that generates the file:</p>
 </span><span style="color:#4f5b66;">    </span><span style="color:#a7adba;">// ...
 </span><span style="color:#4f5b66;">}
 </span></code></pre>
-<p>And its <a href="https://github.com/rust-lang/rust/blob/master/src/bootstrap/lib.rs#L712">caller</a> is:</p>
+<p>And it's called like:</p>
 <pre style="background-color:#eff1f5;"><code class="language-rust"><span style="color:#b48ead;">impl </span><span style="color:#4f5b66;">Build {
 </span><span style="color:#4f5b66;">    </span><span style="color:#a7adba;">// ...
 </span><span style="color:#4f5b66;">    </span><span style="color:#a7adba;">/// Executes the entire build, as configured by the flags and configuration.
@@ -63,9 +63,9 @@ that generates the file:</p>
 </span><span style="color:#4f5b66;">}
 </span></code></pre>
 <p>Note that the call is compiled only if the <code>build-metrics</code> feature is enabled.
-So probably the feature isn't enabled in the CI job?
+So probably the feature wasn't enabled in the CI job?
 Searching for <code>build-metrics</code> and excluding all the conditional compilation attributes
-leads me to these lines in <a href="https://github.com/rust-lang/rust/blob/master/src/bootstrap/bootstrap.py#L916"><code>bootstrap.py</code></a>:</p>
+led me to these lines in <code>bootstrap.py</code>:</p>
 <pre style="background-color:#eff1f5;"><code class="language-Python"><span style="color:#b48ead;">class </span><span style="color:#d08770;">RustBuild</span><span style="color:#343d46;">(</span><span style="color:#a3be8c;">object</span><span style="color:#343d46;">):
 </span><span style="color:#4f5b66;">    </span><span style="color:#a7adba;"># ...
 </span><span style="color:#4f5b66;">    </span><span style="color:#b48ead;">def </span><span style="color:#8fa1b3;">build_bootstrap</span><span style="color:#4f5b66;">(</span><span style="color:#bf616a;">self</span><span style="color:#4f5b66;">, </span><span style="color:#bf616a;">color</span><span style="color:#4f5b66;">, </span><span style="color:#bf616a;">warnings</span><span style="color:#4f5b66;">, </span><span style="color:#bf616a;">verbose_count</span><span style="color:#4f5b66;">):
@@ -76,16 +76,16 @@ leads me to these lines in <a href="https://github.com/rust-lang/rust/blob/maste
 </span><span style="color:#4f5b66;">        </span><span style="color:#a7adba;"># ...
 </span><span style="color:#4f5b66;">    </span><span style="color:#a7adba;"># ...
 </span></code></pre>
-<p>This tells me that the feature will be enabled if <code>metrics</code> is set to <code>true</code> in the <code>[build]</code> section of <code>config.toml</code>.
-It also hints that searching instead for regex <code>/build.metrics/</code> might be useful. Within the search result,
-this <a href="https://github.com/rust-lang/rust/blob/master/src/ci/run.sh#L50-L54">if-branch</a> from <code>src/ci/run.sh</code> catches my attention:</p>
+<p>This told me that the feature will be enabled if <code>metrics</code> is set to <code>true</code> in the <code>[build]</code> section of <code>config.toml</code>.
+It also hinted that searching instead for regex <code>/build.metrics/</code> might be useful. Within the search result,
+this if-branch from <code>src/ci/run.sh</code> caught my attention:</p>
 <pre style="background-color:#eff1f5;"><code class="language-bash"><span style="color:#b48ead;">if </span><span style="color:#4f5b66;">! </span><span style="color:#8fa1b3;">isCI </span><span style="color:#4f5b66;">|| </span><span style="color:#8fa1b3;">isCiBranch</span><span style="color:#4f5b66;"> auto || </span><span style="color:#8fa1b3;">isCiBranch</span><span style="color:#4f5b66;"> beta || </span><span style="color:#8fa1b3;">isCiBranch</span><span style="color:#4f5b66;"> try || </span><span style="color:#8fa1b3;">isCiBranch</span><span style="color:#4f5b66;"> try-perf; </span><span style="color:#b48ead;">then
 </span><span style="color:#4f5b66;">    </span><span style="color:#bf616a;">RUST_CONFIGURE_ARGS</span><span style="color:#4f5b66;">=&quot;$</span><span style="color:#bf616a;">RUST_CONFIGURE_ARGS</span><span style="color:#a3be8c;"> --set build.print-step-timings --enable-verbose-tests</span><span style="color:#4f5b66;">&quot;
 </span><span style="color:#4f5b66;">    </span><span style="color:#bf616a;">RUST_CONFIGURE_ARGS</span><span style="color:#4f5b66;">=&quot;$</span><span style="color:#bf616a;">RUST_CONFIGURE_ARGS</span><span style="color:#a3be8c;"> --set build.metrics</span><span style="color:#4f5b66;">&quot;
 </span><span style="color:#4f5b66;">    </span><span style="color:#bf616a;">HAS_METRICS</span><span style="color:#4f5b66;">=</span><span style="color:#a3be8c;">1
 </span><span style="color:#b48ead;">fi
 </span></code></pre>
-<p>Now it's clear that <code>--set build.metrics</code> is only specified if</p>
+<p>Clearly <code>--set build.metrics</code> is only specified if</p>
 <ul>
 <li>the build is not run with CI, or</li>
 <li>the branch being built is <code>refs/heads/auto</code>, or</li>
@@ -93,7 +93,7 @@ this <a href="https://github.com/rust-lang/rust/blob/master/src/ci/run.sh#L50-L5
 <li>the branch being built is <code>refs/heads/try</code>, or</li>
 <li>the branch being built is <code>refs/heads/try-perf</code></li>
 </ul>
-<p>Unfortunately the failing job doesn't satisfy any of these conditions because its environment included:</p>
+<p>Unfortunately the failing job didn't satisfy any of these conditions because its environment included:</p>
 <pre style="background-color:#eff1f5;"><code><span style="color:#4f5b66;">2023-06-05T02:37:02.9545370Z CI=true
 </span><span style="color:#4f5b66;">2023-06-05T02:37:02.9552191Z GITHUB_REF=refs/pull/111626/merge
 </span></code></pre>
@@ -104,9 +104,9 @@ this <a href="https://github.com/rust-lang/rust/blob/master/src/ci/run.sh#L50-L5
 <p>Back to the beginning, why did the job that I manually launched fail? Because its environment didn't request the build to
 produce <code>metrics.json</code> at all. But wait, every time a PR is opened or pushed to, several default jobs will run.
 Why didn't these jobs fail? They shouldn't take the if-branch, because they were not launched by bors either.
-I check the CI result of one of these jobs, <code>x86_64-gnu-llvm-14</code>, and find that the step of
-uploading build artifacts to S3 was not executed. Looking at the <a href="https://github.com/rust-lang/rust/blob/master/.github/workflows/ci.yml#L146-L151">definition</a> of that step,
-I see the following <code>if</code> expression at the end:</p>
+I then checked the CI result of one of these jobs, <code>x86_64-gnu-llvm-14</code>, and found that the step of
+uploading build artifacts to S3 was not executed. Looking at the definition of that step,
+I saw the following <code>if</code> expression at the end:</p>
 <pre style="background-color:#eff1f5;"><code class="language-yaml"><span style="color:#4f5b66;">      - </span><span style="color:#bf616a;">name</span><span style="color:#4f5b66;">: </span><span style="color:#a3be8c;">upload artifacts to S3
 </span><span style="color:#4f5b66;">        </span><span style="color:#bf616a;">run</span><span style="color:#4f5b66;">: </span><span style="color:#a3be8c;">src/ci/scripts/upload-artifacts.sh
 </span><span style="color:#4f5b66;">        </span><span style="color:#bf616a;">env</span><span style="color:#4f5b66;">:
@@ -126,8 +126,8 @@ I see the following <code>if</code> expression at the end:</p>
 </ul>
 </li>
 </ul>
-<p>In my case, only the last three OR-ed conditions make a difference. Comparing the environment of <code>x86_64-gnu-llvm-14</code>
-to that of <code>dist-various-1</code> indicates that the latter has <code>DEPLOY</code> set to 1, due to a <a href="https://github.com/rust-lang/rust/blob/master/src/ci/scripts/setup-environment.sh#L27-L37">previous step</a> in the CI pipeline:</p>
+<p>In my case, only the last three OR-ed conditions would make a difference. Comparing the environment of <code>x86_64-gnu-llvm-14</code>
+to that of <code>dist-various-1</code> indicated that the latter had <code>DEPLOY</code> set to 1, due to a previous step in the CI pipeline:</p>
 <pre style="background-color:#eff1f5;"><code class="language-bash"><span style="color:#a7adba;"># Builders starting with `dist-` are dist builders, but if they also end with
 </span><span style="color:#a7adba;"># `-alt` they are alternate dist builders.
 </span><span style="color:#b48ead;">if </span><span style="color:#96b5b4;">[[ </span><span style="color:#4f5b66;">&quot;$</span><span style="color:#a3be8c;">{</span><span style="color:#bf616a;">CI_JOB_NAME</span><span style="color:#a3be8c;">}</span><span style="color:#4f5b66;">&quot; = dist-* </span><span style="color:#96b5b4;">]]</span><span style="color:#4f5b66;">; </span><span style="color:#b48ead;">then
@@ -140,8 +140,8 @@ to that of <code>dist-various-1</code> indicates that the latter has <code>DEPLO
 </span><span style="color:#4f5b66;">    </span><span style="color:#b48ead;">fi
 </span><span style="color:#b48ead;">fi
 </span></code></pre>
-<p>In addition, the jobs launched by myself have <code>GITHUB_EVENT_NAME=pull_request</code>,
-while the jobs launched by bors have <code>GITHUB_EVENT_NAME=push</code>.
+<p>In addition, the jobs launched by myself had <code>GITHUB_EVENT_NAME=pull_request</code>,
+while the jobs launched by bors had <code>GITHUB_EVENT_NAME=push</code>.
 Therefore in my case, the job <code>x86_64-gnu-llvm-14</code> didn't complain about <code>metrics.json</code> because
 it skipped the uploading step due to its environment settings. That's why the default jobs didn't fail.</p>
 <hr />
